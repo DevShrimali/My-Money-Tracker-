@@ -59,7 +59,7 @@ export default function Dashboard() {
         const guestFlag = localStorage.getItem("prosper_guest_session");
         if (guestFlag === "true") {
           setUser({ id: "guest", email: "guest@prosper.local", user_metadata: { name: "Guest User", full_name: "Guest" } });
-          fetchGuestEntries();
+          fetchLocalEntries();
         } else {
           router.push("/auth");
         }
@@ -81,7 +81,7 @@ export default function Dashboard() {
         const guestFlag = localStorage.getItem("prosper_guest_session");
         if (guestFlag === "true") {
           setUser({ id: "guest", email: "guest@prosper.local", user_metadata: { name: "Guest User", full_name: "Guest" } });
-          fetchGuestEntries();
+          fetchLocalEntries();
         } else {
           router.push("/auth");
         }
@@ -109,10 +109,10 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch entries from localStorage for Guest users
-  const fetchGuestEntries = () => {
+  // Fetch entries from localStorage
+  const fetchLocalEntries = () => {
     try {
-      const localData = localStorage.getItem("prosper_guest_entries");
+      const localData = localStorage.getItem("prosper_entries");
       if (localData) {
         setEntries(JSON.parse(localData));
       } else {
@@ -137,6 +137,15 @@ export default function Dashboard() {
     router.push("/auth");
   };
 
+  // Reset app data (for local guest mode)
+  const handleResetApp = () => {
+    if (window.confirm("Are you sure you want to clear all transactions and reset the app? This cannot be undone.")) {
+      localStorage.removeItem("prosper_entries");
+      setEntries([]);
+      showToast("App reset successfully.");
+    }
+  };
+
   // Add new ledger record
   const handleAddEntry = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,7 +154,7 @@ export default function Dashboard() {
     setFormSubmitting(true);
     const amountNum = parseFloat(formAmount);
 
-    // Guest Storage flow
+    // Guest storage logic
     if (user.id === "guest") {
       const newEntry: Entry = {
         id: Math.random().toString(36).substring(2, 9),
@@ -158,7 +167,7 @@ export default function Dashboard() {
       };
       const updated = [...entries, newEntry];
       setEntries(updated);
-      localStorage.setItem("prosper_guest_entries", JSON.stringify(updated));
+      localStorage.setItem("prosper_entries", JSON.stringify(updated));
       showToast("Transaction registered successfully.");
       setIsModalOpen(false);
       setFormName("");
@@ -168,18 +177,17 @@ export default function Dashboard() {
       return;
     }
 
+    // Live Database logic
     try {
-      // 1. Create entry payload for public.entries
       const entryPayload: Omit<Entry, "id"> = {
         user_id: user.id,
         type: formType,
         name: formName,
         amount: amountNum,
         date: formDate,
-        paid: formType === "income" ? true : false, // Income marks settled initially
+        paid: formType === "income" ? true : false,
       };
 
-      // 2. Insert record into database to retrieve temporary ID
       const { data, error } = await supabase
         .from("entries")
         .insert([entryPayload])
@@ -189,48 +197,9 @@ export default function Dashboard() {
       if (error) throw error;
       const newEntry: Entry = data;
 
-      // 3. Optional Google Calendar Sync
-      let calendarEventId = "";
-      if (syncCalendar && providerToken) {
-        try {
-          const syncRes = await fetch("/api/calendar", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              providerToken,
-              name: formName,
-              amount: amountNum,
-              date: formDate,
-              type: formType,
-              id: newEntry.id,
-            }),
-          });
-          const syncData = await syncRes.json();
-          if (syncRes.ok && syncData.eventId) {
-            calendarEventId = syncData.eventId;
-            // Update Supabase with event ID
-            await supabase
-              .from("entries")
-              .update({ calendar_event_id: calendarEventId })
-              .eq("id", newEntry.id);
-            
-            newEntry.calendar_event_id = calendarEventId;
-          } else {
-            console.warn("Calendar Sync Failed:", syncData.error);
-            showToast("Saved to DB, but failed syncing to Google Calendar.", "error");
-          }
-        } catch (calErr) {
-          console.error("Calendar Sync Exception:", calErr);
-        }
-      }
-
       setEntries((prev) => [...prev, newEntry]);
       showToast("Transaction registered successfully.");
       setIsModalOpen(false);
-      
-      // Reset state fields
       setFormName("");
       setFormAmount("");
       setFormDate("");
@@ -243,31 +212,15 @@ export default function Dashboard() {
 
   // Delete transaction record
   const handleDeleteEntry = async (item: Entry) => {
-    // Guest Storage flow
     if (item.user_id === "guest") {
       const updated = entries.filter((e) => e.id !== item.id);
       setEntries(updated);
-      localStorage.setItem("prosper_guest_entries", JSON.stringify(updated));
+      localStorage.setItem("prosper_entries", JSON.stringify(updated));
       showToast("Transaction record removed.");
       return;
     }
 
     try {
-      // 1. If exists in Google Calendar, delete reminder
-      if (item.calendar_event_id && providerToken) {
-        try {
-          await fetch(`/api/calendar?event_id=${item.calendar_event_id}`, {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${providerToken}`,
-            },
-          });
-        } catch (calErr) {
-          console.error("Failed to delete Google Calendar event", calErr);
-        }
-      }
-
-      // 2. Delete entry from database
       const { error } = await supabase.from("entries").delete().eq("id", item.id);
       if (error) throw error;
 
@@ -280,12 +233,11 @@ export default function Dashboard() {
 
   // Toggle paid status
   const handleTogglePaidStatus = async (item: Entry) => {
-    // Guest Storage flow
     if (item.user_id === "guest") {
       const updatedPaid = !item.paid;
       const updated = entries.map((e) => (e.id === item.id ? { ...e, paid: updatedPaid } : e));
       setEntries(updated);
-      localStorage.setItem("prosper_guest_entries", JSON.stringify(updated));
+      localStorage.setItem("prosper_entries", JSON.stringify(updated));
       showToast(updatedPaid ? "Settlement updated to Paid" : "Reverted to pending due");
       return;
     }

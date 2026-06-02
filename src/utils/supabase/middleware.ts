@@ -12,9 +12,12 @@ export const updateSession = async (request: NextRequest) => {
     },
   });
 
+  const url = supabaseUrl || "https://placeholder-project.supabase.co";
+  const key = supabaseKey || "sb_publishable_placeholder";
+
   const supabase = createServerClient(
-    supabaseUrl!,
-    supabaseKey!,
+    url,
+    key,
     {
       cookies: {
         getAll() {

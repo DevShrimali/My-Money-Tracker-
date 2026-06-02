@@ -84,7 +84,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
       setEntries(data || []);
     } catch (err: any) {
-      showToast(err.message || "Failed to load entries", "error");
+      console.error("Supabase load error:", err);
+      const isNetworkError = err.message?.toLowerCase().includes("failed to fetch") || 
+                            err.message?.toLowerCase().includes("fetch") ||
+                            (err.status === 0);
+      const friendlyMsg = isNetworkError 
+        ? "Network connection issue: Please verify your Supabase project is active (not paused) and internet is stable." 
+        : (err.message || "Failed to load entries");
+      showToast(friendlyMsg, "error");
     }
   };
 

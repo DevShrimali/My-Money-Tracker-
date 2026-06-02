@@ -10,6 +10,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -28,12 +29,32 @@ export default function LoginPage() {
     }
   }, []);
 
-  // Handle Sign In and Sign Up form submission
+  // Handle Sign In, Sign Up, and Forgot Password form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
     setSuccessMsg("");
+
+    if (isForgotPassword) {
+      if (!email) {
+        setErrorMsg("Please enter your email address.");
+        setLoading(false);
+        return;
+      }
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/update-password`,
+        });
+        if (error) throw error;
+        setSuccessMsg("Reset link sent! Please check your email to update your password.");
+      } catch (err: any) {
+        setErrorMsg(err.message || "Failed to send reset link");
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
 
     if (!email || !password) {
       setErrorMsg("Please fill in all required fields.");
@@ -124,7 +145,11 @@ export default function LoginPage() {
         {/* Form Fields container */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <h2 className="text-sm font-bold text-slate-800 tracking-tight">
-            {isSignUp ? "Create a new account" : "Sign in to your account"}
+            {isForgotPassword
+              ? "Reset your password"
+              : isSignUp
+              ? "Create a new account"
+              : "Sign in to your account"}
           </h2>
 
           {/* Validation Messages */}
@@ -141,7 +166,7 @@ export default function LoginPage() {
           )}
 
           {/* Name Field (Sign Up Only) */}
-          {isSignUp && (
+          {isSignUp && !isForgotPassword && (
             <div className="space-y-1.5">
               <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-widest">Full Name</label>
               <div className="relative">
@@ -175,21 +200,38 @@ export default function LoginPage() {
           </div>
 
           {/* Password Field */}
-          <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-widest">Password</label>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="password"
-                required
-                minLength={6}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:border-slate-400 text-slate-900 placeholder-slate-400"
-              />
+          {!isForgotPassword && (
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase font-bold text-slate-400 block tracking-widest">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-10 pr-3.5 py-2.5 text-sm focus:outline-none focus:border-slate-400 text-slate-900 placeholder-slate-400"
+                />
+              </div>
+              {!isSignUp && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotPassword(true);
+                      setErrorMsg("");
+                      setSuccessMsg("");
+                    }}
+                    className="text-[11px] text-slate-500 hover:text-emerald-600 hover:underline font-bold"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
           {/* Submit Action Button */}
           <button
@@ -201,7 +243,13 @@ export default function LoginPage() {
               <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
             ) : (
               <>
-                <span>{isSignUp ? "Create Account" : "Sign In"}</span>
+                <span>
+                  {isForgotPassword
+                    ? "Send Reset Link"
+                    : isSignUp
+                    ? "Create Account"
+                    : "Sign In"}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -210,16 +258,31 @@ export default function LoginPage() {
 
         {/* View Toggle Links */}
         <div className="text-center">
-          <button
-            onClick={() => {
-              setIsSignUp(!isSignUp);
-              setErrorMsg("");
-              setSuccessMsg("");
-            }}
-            className="text-xs text-emerald-600 hover:underline font-semibold"
-          >
-            {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Create one"}
-          </button>
+          {isForgotPassword ? (
+            <button
+              type="button"
+              onClick={() => {
+                setIsForgotPassword(false);
+                setErrorMsg("");
+                setSuccessMsg("");
+              }}
+              className="text-xs text-emerald-600 hover:underline font-semibold"
+            >
+              Back to Sign In
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setErrorMsg("");
+                setSuccessMsg("");
+              }}
+              className="text-xs text-emerald-600 hover:underline font-semibold"
+            >
+              {isSignUp ? "Already have an account? Sign In" : "Don't have an account? Create one"}
+            </button>
+          )}
         </div>
 
         {/* Guest fallback action */}
